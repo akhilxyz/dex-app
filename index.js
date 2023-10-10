@@ -1,41 +1,144 @@
-const express = require("express");
-const Moralis = require("moralis").default;
+const express = require('express');
+const axios = require('axios');
 const app = express();
-const cors = require("cors");
-require("dotenv").config();
-const port = 3001;
-const MORALIS_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6IjE1YzUzZDFmLTBmMTItNDdmNC1iNGFhLTZiMTVmNWY4MDE4MyIsIm9yZ0lkIjoiNTQxMTEiLCJ1c2VySWQiOiI1Mzc2MSIsInR5cGVJZCI6IjIxYTBiZjY0LWE3NjQtNDIxZC1iYzQ2LTMwMzNiNTc0N2QzOSIsInR5cGUiOiJQUk9KRUNUIiwiaWF0IjoxNjk2ODYyOTU4LCJleHAiOjQ4NTI2MjI5NTh9.FfIZLyNUS-5AJjIW7N9q8Wp4UKRIAwrGCRHrxp5FSYE"
+const port = process.env.PORT || 3004;
+const cors = require('cors'); // Import the cors package
+
+const API_TOKEN = 'xCq9OlN6VnUPJ0GKY4JxWoiw3R2hf387'; // Replace with your actual authorization token
 
 app.use(cors());
 app.use(express.json());
 
-app.get("/tokenPrice", async (req, res) => {
+app.get('/allowance', async (req, res) => {
+  const { tokenAddress, walletAddress } = req.query;
+  try {
+    const response = await axios.get(
+      `https://api.1inch.dev/swap/v5.2/137/approve/allowance?tokenAddress=${tokenAddress}&walletAddress=${walletAddress}`,
+      {
+        headers: {
+          Authorization: `Bearer ${API_TOKEN}`,
+          Accept: '*/*',
+        },
+      }
+    );
 
-  const {query} = req;
+    // The allowance data is in response.data
+    const allowanceData = response.data;
 
-  const responseOne = await Moralis.EvmApi.token.getTokenPrice({
-    address: query.addressOne
-  })
-
-  const responseTwo = await Moralis.EvmApi.token.getTokenPrice({
-    address: query.addressTwo
-  })
-
-  const usdPrices = {
-    tokenOne: responseOne.raw.usdPrice,
-    tokenTwo: responseTwo.raw.usdPrice,
-    ratio: responseOne.raw.usdPrice/responseTwo.raw.usdPrice
+    res.json(allowanceData);
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
-  
-
-  return res.status(200).json(usdPrices);
 });
 
-// console.log("process.env.MORALIS_KEY", process.env.MORALIS_KEY)
-Moralis.start({
-  apiKey: MORALIS_KEY,
-}).then(() => {
-  app.listen(port, () => {
-    console.log(`Listening for API Calls`);
-  });
+app.post('/getPrice', async (req, res) => {
+  const { addressOne, addressTwo } = req.body;
+  const currency = 'USD';
+  try {
+    const config = {
+      headers: {
+        Authorization: `Bearer ${API_TOKEN}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+    };
+
+    const responseOne = await axios.post(
+      'https://api.1inch.dev/price/v1.1/137',
+      {
+        tokens: [addressOne, addressTwo],
+        currency,
+      },
+      config
+    );
+
+    console.log("responseOne", responseOne)
+
+    if (responseOne.status !== 200) {
+      throw new Error('Failed to fetch token prices from 1inch API');
+    }
+
+    const usdPrices = {
+      tokenOne: responseOne.data[addressOne],
+      tokenTwo: responseOne.data[addressTwo],
+      ratio: responseOne.data[addressOne] / responseOne.data[addressTwo],
+    };
+
+    res.send(usdPrices);
+  } catch (error) {
+    console.error('Error:', error.message);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.get('/approve', async (req, res) => {
+  const { tokenAddress } = req.query;
+  console.log("tokenAddress", tokenAddress)
+  try {
+    const apiUrl = 'https://api.1inch.dev/swap/v5.2/137/approve/transaction';
+    const tokenAddress = '0x9de41aff9f55219d5bf4359f167d1d0c772a396d';
+    const amount = '100000000000';
+
+
+
+    const response = await axios
+      .get(apiUrl, {
+        params: {
+          tokenAddress,
+          amount,
+        },
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${API_TOKEN}`,
+        },
+      })
+
+    if (response.status !== 200) {
+      throw new Error('Failed to fetch token prices from 1inch API', response.statusText);
+    }
+
+    // The approval transaction data is in response.data
+    const approvalTransactionData = response.data;
+
+    res.json(approvalTransactionData);
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.get('/swap', async (req, res) => {
+  const { tokenOneAddress, tokenTwoAddress, tokenOneAmount, address, slippage } = req.query;
+  try {
+    const apiUrl = 'https://api.1inch.dev/swap/v5.2/137/swap';
+    const src = tokenOneAddress;
+    const dst = tokenTwoAddress;
+    const amount = tokenOneAmount.padEnd(tokenOne.decimals + tokenOneAmount.length, '0');
+    const from = address;
+    const response = await axios.get(apiUrl, {
+      params: {
+        src,
+        dst,
+        amount,
+        from,
+        slippage,
+      },
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${API_TOKEN}`,
+      },
+    });
+    if (response.status !== 200) {
+      throw new Error('Failed to SWAP', response.statusText);
+    }
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
 });
