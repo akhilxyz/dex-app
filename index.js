@@ -53,8 +53,6 @@ app.post('/getPrice', async (req, res) => {
       config
     );
 
-    console.log("responseOne", responseOne)
-
     if (responseOne.status !== 200) {
       throw new Error('Failed to fetch token prices from 1inch API');
     }
@@ -74,14 +72,9 @@ app.post('/getPrice', async (req, res) => {
 
 app.get('/approve', async (req, res) => {
   const { tokenAddress } = req.query;
-  console.log("tokenAddress", tokenAddress)
   try {
     const apiUrl = 'https://api.1inch.dev/swap/v5.2/137/approve/transaction';
-    const tokenAddress = '0x9de41aff9f55219d5bf4359f167d1d0c772a396d';
     const amount = '100000000000';
-
-
-
     const response = await axios
       .get(apiUrl, {
         params: {
